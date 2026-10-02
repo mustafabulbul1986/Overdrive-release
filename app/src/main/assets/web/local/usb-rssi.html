@@ -53,11 +53,6 @@
         .ur-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
         .ur-saved { font-size: 12px; color: var(--text-muted); }
 
-        /* The master switch belongs on every tab: turning the device on is the first thing
-           you need from Tuning and Scanner too, and app-tabs keeps untagged cards on the
-           first tab only. */
-        #urMaster[hidden] { display: block; }
-
         /* Everything below the master switch is inert while the device is off. */
         .ur-gated { transition: opacity 0.15s ease; }
         .ur-gated.off { opacity: 0.4; pointer-events: none; }
@@ -100,8 +95,9 @@
             </header>
 
             <div class="page-body">
-                <!-- ===== Master switch (always on every tab) ===== -->
-                <div class="card" id="urMaster">
+                <!-- ===== Master switch (Tuning tab: it is a setting, and it sits above the
+                     settings it gates) ===== -->
+                <div class="card" id="urMaster" data-tab="tuning">
                     <div class="card-header">
                         <div class="card-title">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11h2M11 11h7"/></svg>
