@@ -1281,6 +1281,11 @@ public class HttpServer {
             return true;
         }
 
+        // USB RSSI device (phone proximity from the USB BLE scanner)
+        if (path.startsWith("/api/usb-rssi")) {
+            return UsbRssiApiHandler.handle(method, path, body, out);
+        }
+
         // Performance API
         if (path.startsWith("/api/performance")) {
             return PerformanceApiHandler.handle(method, path, body, out);

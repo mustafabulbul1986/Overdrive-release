@@ -1849,6 +1849,19 @@ public class Automations {
                 if (value.length() > 64) value = value.substring(0, 64);
                 update(com.overdrive.app.automation.condition.BydEvent.BT_DEVICE_NAME, value, true);
                 return true;
+            case "phoneProximity":
+                // Phone near/far from the USB RSSI device. The module publishes a DECISION, not
+                // a raw reading: it already applied the thresholds, the time windows and the
+                // sample floor, and it holds the previous decision while the phone is in
+                // between, sparse or absent. So only these two words are accepted; anything
+                // else is dropped rather than published (no spurious edge). forceStore: same
+                // rationale as btState, so the editor's live hint has a value before the first
+                // proximity rule is enabled.
+                if ("near".equals(value) || "far".equals(value)) {
+                    update(com.overdrive.app.automation.condition.BydEvent.PHONE_PROXIMITY, value, true);
+                    return true;
+                }
+                return false;
             default:
                 return false;
         }

@@ -1488,6 +1488,16 @@ public class CameraDaemon {
             log("ClusterViewMirrorService register failed: " + t.getMessage());
         }
 
+        // USB RSSI device: phone proximity from a BLE scanner on the USB port, published as
+        // the phoneProximity automation signal. It lives here because this daemon is the one
+        // process that survives the power-off app kill, which is exactly when a proximity rule
+        // has to work. Off by default, and a missing/failing link must never stop the daemon.
+        try {
+            com.overdrive.app.usbrssi.UsbRssiModule.getInstance().init(null);
+        } catch (Throwable t) {
+            log("USB RSSI module init failed: " + t);
+        }
+
         log("Daemon ready on TCP:" + TCP_PORT + " HTTP:" + HTTP_PORT);
 
         // Periodic memory monitor — mirrors AccSentryDaemon.logMemoryStatus().

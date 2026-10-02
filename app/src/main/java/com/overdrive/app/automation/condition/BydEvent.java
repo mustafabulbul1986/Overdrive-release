@@ -86,6 +86,12 @@ public class BydEvent {
     // has no telephony access). Enables "mute media when a call comes in" etc. Published
     // via Automations.publishExternalEvent from CallStateMonitor.
     public static final EventData CALL_STATE = new EventData("callState");
+    // Phone proximity from the USB RSSI device (an ESP32-C3 BLE scanner on the head unit's
+    // USB port): "near" or "far". Only those two are ever published - the classifier holds the
+    // last decision while the signal is in between, too sparse, or absent, so "the phone is not
+    // around" never reads as "far" (see ProximityClassifier). Published via
+    // Automations.publishExternalEvent, like callState.
+    public static final EventData PHONE_PROXIMITY = new EventData("phoneProximity");
     // The same "speed" event is stored twice under different units so a condition can
     // pick either without any runtime unit conversion — the km/h value is the canonical
     // BydVehicleData.speedKmh, the mph value is derived once here.

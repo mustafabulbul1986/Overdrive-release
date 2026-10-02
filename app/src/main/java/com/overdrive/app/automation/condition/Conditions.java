@@ -231,6 +231,16 @@ public class Conditions {
                         new Label("idle", "automation.call_idle"),
                         new Label("ringing", "automation.call_ringing"),
                         new Label("offhook", "automation.call_active"))));
+        // Phone proximity from the USB RSSI device. Two states by design: the module keeps the
+        // last one while the phone is at an in-between distance, reporting too few packets, or
+        // not visible at all, so a rule never fires just because the phone went out of range.
+        addCondition(new EventCondition(
+                new Label("phoneProximity", "automation.phone_proximity"),
+                "automation.phone_proximity_description",
+                new EnumType(
+                        new Label("state", "automation.state"),
+                        new Label("near", "automation.phone_near"),
+                        new Label("far", "automation.phone_far"))));
         addCondition(new EventCondition(
                 new Label("speed", "automation.speed"),
                 "automation.speed_description",

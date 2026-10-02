@@ -132,7 +132,7 @@ public final class AutomationCategories {
         // ── Sensor-only signals (triggers/conditions with no matching action) ──
         put(SENSORS, "batteryLevel", "targetSoc", "estimatedRange", "chargingState", "chargeGun",
                 "batterySoh", "keyBattery", "aux12vBattery", "fuelLevel", "pm25",
-                "autoWiper", "wiperActive", "rainProbability", "callState");
+                "autoWiper", "wiperActive", "rainProbability", "callState", "phoneProximity");
 
         // Keep existing saved automations resolvable, but omit engine-dependent items from new
         // pickers once the collector has positively identified the current car as BEV.
