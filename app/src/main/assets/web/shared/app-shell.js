@@ -80,6 +80,7 @@
         { href: 'performance.html',                       i18n: 'nav.performance',    label: 'Performance',    svg: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
         { href: 'network.html',                           i18n: 'nav.network',        label: 'Network',        svg: '<path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 13a9 9 0 0 1 14 0"/><path d="M1.8 9.6a14 14 0 0 1 20.4 0"/>', svgExtra: 'stroke-linecap="round"' },
         { href: 'remote-dev-view.html',                   label: 'Remote Dev View',  svg: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="m9 8 2 2-2 2M13 12h2"/>' },
+        { href: 'usb-rssi.html',                          i18n: 'nav.usb_rssi',       label: 'USB RSSI Device', svg: '<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11h2M11 11h7"/>' },
 
         // ===== Settings ===== — surveillance + recording + notifications
         // are settings sub-destinations under SettingsFragment on native.

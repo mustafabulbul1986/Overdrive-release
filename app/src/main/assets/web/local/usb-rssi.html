@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title data-i18n="app.usb_rssi_title">USB RSSI Device - OverDrive</title>
+    <link rel="icon" type="image/webp" href="../shared/app-icon-dark.webp">
+    <script src="../shared/theme.js?v=8"></script>
+    <script src="../shared/app-shell.js?v=7"></script>
+    <!--
+      Bottom-tab manifest for the USB RSSI device — three task-based tabs:
+        Live    — master switch, current reading, the last two minutes, recent events
+        Tuning  — thresholds, windows, sample floors (what makes it decide near/far)
+        Scanner — which beacon to follow, scanner firmware
+      Live is read-only (no Apply slot); the other two keep inline Save buttons.
+    -->
+    <script>
+        window.OT_TABS = [
+            { id: 'live',    label: 'Live',    i18n: 'usb_rssi.tab_live',    svg: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', readOnly: true },
+            { id: 'tuning',  label: 'Tuning',  i18n: 'usb_rssi.tab_tuning',  svg: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>' },
+            { id: 'scanner', label: 'Scanner', i18n: 'usb_rssi.tab_scanner', svg: '<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11h2M11 11h7"/>' }
+        ];
+    </script>
+    <script src="../shared/app-tabs.js"></script>
+    <link rel="stylesheet" href="../shared/styles.css?v=34">
+    <style>
+        /* Reading block: one big number plus the state pill it resolves to. */
+        .ur-reading { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .ur-rssi { font-size: 48px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; color: var(--text-primary); }
+        .ur-rssi small { font-size: 16px; font-weight: 500; color: var(--text-muted); margin-left: 4px; }
+        .ur-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+        .ur-pill {
+            display: inline-block; padding: 5px 12px; border-radius: 999px;
+            font-size: 13px; font-weight: 700; color: #fff; background: var(--text-muted);
+        }
+        .ur-pill.near { background: var(--status-success); }
+        .ur-pill.far { background: var(--status-error, #b42318); }
+        .ur-pill.between { background: var(--status-warning); }
+
+        /* Chart: 2 minutes of samples with the two thresholds drawn across it. */
+        .ur-chart { width: 100%; height: 170px; display: block; }
+
+        .ur-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .ur-field { display: flex; flex-direction: column; gap: 4px; }
+        .ur-field label { font-size: 12px; color: var(--text-secondary); }
+        .ur-field input {
+            padding: 10px 14px; background: var(--bg-elevated); border: 1px solid var(--border-color);
+            border-radius: 8px; color: var(--text-primary); font-size: 14px;
+        }
+        .ur-field input:focus { outline: none; border-color: var(--brand-primary); }
+        .ur-field input.mono { font-family: var(--family-mono); }
+        .ur-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+        .ur-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+        .ur-saved { font-size: 12px; color: var(--text-muted); }
+
+        /* The master switch belongs on every tab: turning the device on is the first thing
+           you need from Tuning and Scanner too, and app-tabs keeps untagged cards on the
+           first tab only. */
+        #urMaster[hidden] { display: block; }
+
+        /* Everything below the master switch is inert while the device is off. */
+        .ur-gated { transition: opacity 0.15s ease; }
+        .ur-gated.off { opacity: 0.4; pointer-events: none; }
+
+        .ur-kv { display: flex; gap: 14px; flex-wrap: wrap; }
+        .ur-kv > div { flex: 1; min-width: 130px; }
+        .ur-kv .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .ur-kv .value { font-size: 14px; color: var(--text-primary); margin-top: 2px; word-break: break-all; }
+        .ur-kv .value.mono { font-family: var(--family-mono); font-size: 13px; }
+
+        .ur-bar { height: 8px; background: var(--border-subtle); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+        .ur-bar > div { height: 100%; width: 0; background: var(--brand-primary); transition: width 0.2s ease; }
+
+        .ur-events { margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-secondary); font-family: var(--family-mono); max-height: 220px; overflow: auto; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- App shell sidebar (rendered by ../shared/app-shell.js) -->
+        <div id="app-shell-mount"></div>
+        <main class="main-content">
+            <div class="mobile-header">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
+                    </svg>
+                </button>
+                <span style="font-weight:600;" data-i18n="usb_rssi.nav">USB RSSI</span>
+                <div style="width:40px;"></div>
+            </div>
+
+            <header class="page-header">
+                <h1 class="page-title" data-i18n="usb_rssi.page_title">USB RSSI Device</h1>
+                <div class="header-actions">
+                    <div class="header-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span id="currentTime">--:--</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-body">
+                <!-- ===== Master switch (always on every tab) ===== -->
+                <div class="card" id="urMaster">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11h2M11 11h7"/></svg>
+                            <span data-i18n="usb_rssi.device">USB RSSI device</span>
+                        </div>
+                        <span class="card-badge" id="urLinkBadge">--</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name" data-i18n="usb_rssi.enable_label">Follow my phone over USB</div>
+                                <div class="setting-desc" data-i18n="usb_rssi.enable_desc">Reads a small BLE scanner plugged into the car's USB port and publishes a "Phone Proximity" signal your automations can use. It does not lock or unlock anything by itself.</div>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="urEnabled" onchange="UsbRssiPage.toggleEnabled()">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="ur-note" id="urLinkNote" style="display:none;"></div>
+                    </div>
+                </div>
+
+                <!-- ===== Live ===== -->
+                <div class="card ur-gated" data-tab="live">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                            <span data-i18n="usb_rssi.reading">Current reading</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="ur-reading">
+                            <div>
+                                <div class="ur-rssi"><span id="urRssi">--</span><small>dBm</small></div>
+                                <div class="ur-sub" id="urSamples">--</div>
+                            </div>
+                            <div>
+                                <div class="label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;" data-i18n="usb_rssi.right_now">Right now</div>
+                                <div style="margin-top:4px;"><span class="ur-pill" id="urClass">--</span></div>
+                                <div class="ur-sub" id="urDecision">--</div>
+                            </div>
+                        </div>
+                        <canvas id="urChart" class="ur-chart"></canvas>
+                        <div class="ur-note" data-i18n="usb_rssi.chart_note">The last two minutes. The upper line is the "near" threshold, the lower one is "far"; in between, the signal keeps whatever it said last.</div>
+                    </div>
+                </div>
+
+                <div class="card ur-gated" data-tab="live">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+                            <span data-i18n="usb_rssi.events">Recent events</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <pre class="ur-events" id="urEvents">--</pre>
+                    </div>
+                </div>
+
+                <!-- ===== Tuning ===== -->
+                <div class="card ur-gated" data-tab="tuning">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+                            <span data-i18n="usb_rssi.thresholds">When is the phone near, and when is it away</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="ur-grid">
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.near_rssi">Near at or above (dBm)</label>
+                                <input type="number" id="nearRssi" min="-110" max="-20">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.far_rssi">Away at or below (dBm)</label>
+                                <input type="number" id="farRssi" min="-110" max="-20">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.near_window">Near: hold for (ms)</label>
+                                <input type="number" id="nearWindowMs" min="300" max="10000" step="100">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.far_window">Away: hold for (ms)</label>
+                                <input type="number" id="farWindowMs" min="300" max="10000" step="100">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.percent">Agreeing readings (%)</label>
+                                <input type="number" id="percent" min="50" max="100">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.no_signal">Call it gone after (ms)</label>
+                                <input type="number" id="noSignalMs" min="1000" max="30000" step="500">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.near_min">Near: fewest readings</label>
+                                <input type="number" id="nearMinSamples" min="1" max="50">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.far_min">Away: fewest readings</label>
+                                <input type="number" id="farMinSamples" min="1" max="50">
+                            </div>
+                        </div>
+                        <div class="ur-actions">
+                            <span class="ur-saved" id="urSavedTuning"></span>
+                            <button class="btn btn-primary" onclick="UsbRssiPage.save()" data-i18n="common.save">Save</button>
+                        </div>
+                        <div class="ur-note" data-i18n="usb_rssi.tuning_note">Stand where you want the car to react and watch the Live tab, then set the thresholds around what you see. Leave a gap of at least 10 dBm between them, or the signal will flip back and forth on the spot. Readings that are too few, in between, or missing never change the answer — the phone being out of range is not the same as being away.</div>
+                    </div>
+                </div>
+
+                <!-- ===== Scanner ===== -->
+                <div class="card ur-gated" data-tab="scanner">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M5 12a7 7 0 0 1 7-7M19 12a7 7 0 0 1-7 7"/></svg>
+                            <span data-i18n="usb_rssi.beacon">Which beacon to follow</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="ur-field">
+                            <label data-i18n="usb_rssi.uuid">UUID</label>
+                            <input type="text" id="uuid" class="mono" spellcheck="false" autocomplete="off" placeholder="00000000-0000-0000-0000-000000000000">
+                        </div>
+                        <div class="ur-grid" style="margin-top:10px;">
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.major">Major</label>
+                                <input type="number" id="major" min="0" max="65535">
+                            </div>
+                            <div class="ur-field">
+                                <label data-i18n="usb_rssi.minor">Minor</label>
+                                <input type="number" id="minor" min="0" max="65535">
+                            </div>
+                        </div>
+                        <div class="ur-actions">
+                            <span class="ur-saved" id="urSavedBeacon"></span>
+                            <button class="btn btn-primary" onclick="UsbRssiPage.save()" data-i18n="common.save">Save</button>
+                        </div>
+                        <div class="ur-note" data-i18n="usb_rssi.beacon_note">These come from whatever app broadcasts the beacon on your phone. The scanner only reports this one, so nothing else nearby is listened to.</div>
+                    </div>
+                </div>
+
+                <div class="card ur-gated" data-tab="scanner">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span data-i18n="usb_rssi.firmware">Scanner firmware</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="ur-kv">
+                            <div>
+                                <div class="label" data-i18n="usb_rssi.fw_version">Version</div>
+                                <div class="value" id="urScannerVersion">--</div>
+                            </div>
+                            <div>
+                                <div class="label" data-i18n="usb_rssi.fw_uuid">UUID on the scanner</div>
+                                <div class="value mono" id="urScannerUuid">--</div>
+                                <div class="ur-sub" id="urScannerUuidNote"></div>
+                            </div>
+                        </div>
+                        <div class="ur-field" style="margin-top:14px;">
+                            <label data-i18n="usb_rssi.fw_file">Firmware file (.bin)</label>
+                            <input type="file" id="urFwFile" accept=".bin">
+                        </div>
+                        <div class="ur-actions">
+                            <span class="ur-saved" id="urFwState"></span>
+                            <button class="btn" onclick="UsbRssiPage.sendFirmware()" data-i18n="usb_rssi.fw_send">Send to scanner</button>
+                        </div>
+                        <div class="ur-bar"><div id="urFwBar"></div></div>
+                        <div class="ur-note" data-i18n="usb_rssi.fw_note">Goes over the USB cable, so the scanner can stay in the car. Proximity stops for about half a minute while it transfers. The scanner checks the file before it switches to it: if the transfer is cut short or the file is wrong, it keeps the firmware it already has.</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    <div id="toastContainer" class="toast-container"></div>
+    <script src="../shared/auth.js"></script>
+    <script src="../shared/core.js?v=20"></script>
+    <script src="../shared/update-flow.js"></script>
+    <script src="../shared/usb-rssi.js?v=1"></script>
+    <script>
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebarOverlay').classList.toggle('show');
+        }
+        BYD.i18n.init().then(function () {
+            BYD.core.init();
+            UsbRssiPage.init();
+        });
+    </script>
+</body>
+</html>
