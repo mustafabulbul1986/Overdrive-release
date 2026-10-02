@@ -48,8 +48,14 @@ const UsbRssiPage = {
         this.chk('urEnabled', c.enabled);
         if (!this.editing) this.seed(c);
 
-        // Everything below the master switch is inert while the device is off.
-        document.querySelectorAll('.ur-gated').forEach((el) => el.classList.toggle('off', !c.enabled));
+        // Everything below the master switch is inert while the device is off. Dimming and
+        // pointer-events alone would still let the keyboard tab into the fields and type, so
+        // the controls are disabled as well.
+        document.querySelectorAll('.ur-gated').forEach((el) => {
+            el.classList.toggle('off', !c.enabled);
+            el.querySelectorAll('input, button, select, textarea')
+                .forEach((f) => { f.disabled = !c.enabled; });
+        });
 
         this.setText('urLinkBadge', c.enabled
             ? (s.running ? s.link : this.t('usb_rssi.state_starting', 'Starting…'))
