@@ -1493,7 +1493,8 @@ public class CameraDaemon {
         // process that survives the power-off app kill, which is exactly when a proximity rule
         // has to work. Off by default, and a missing/failing link must never stop the daemon.
         try {
-            com.overdrive.app.usbrssi.UsbRssiModule.getInstance().init(null);
+            com.overdrive.app.usbrssi.UsbRssiModule.getInstance()
+                    .init(new com.overdrive.app.usbrssi.UsbRssiLink());
         } catch (Throwable t) {
             log("USB RSSI module init failed: " + t);
         }
