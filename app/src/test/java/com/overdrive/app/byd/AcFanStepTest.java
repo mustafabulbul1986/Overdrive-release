@@ -74,6 +74,27 @@ public class AcFanStepTest {
         assertTrue(en.contains("\"fan_slower\": "));
     }
 
+    @Test
+    public void automationOffersTheStepInTheClimateCategory() throws Exception {
+        String actions = read("app/src/main/java/com/overdrive/app/automation/action/Actions.java");
+        int start = actions.indexOf("new Label(\"stepAcFan\", \"automation.step_ac_fan\")");
+        assertTrue(start >= 0);
+        String step = actions.substring(start, actions.indexOf("addAction(", start));
+        assertTrue(step.contains("\"/api/vehicle/climate\""));
+        assertTrue(step.contains("\"{\\\"action\\\":\\\"step_fan\\\",\\\"delta\\\":${delta}}\""));
+        assertTrue(step.contains("new Label(\"1\", \"automation.step_faster\")"));
+        assertTrue(step.contains("new Label(\"-1\", \"automation.step_slower\")"));
+
+        String categories = read("app/src/main/java/com/overdrive/app/automation/AutomationCategories.java");
+        assertTrue(categories.contains("\"setAcFan\", \"stepAcFan\""));
+
+        String en = read("app/src/main/assets/server-i18n/en.json");
+        assertTrue(en.contains("\"step_ac_fan\": "));
+        assertTrue(en.contains("\"step_ac_fan_description\": "));
+        assertTrue(en.contains("\"step_faster\": "));
+        assertTrue(en.contains("\"step_slower\": "));
+    }
+
     private static String read(String relativePath) throws Exception {
         Path current = Paths.get("").toAbsolutePath();
         while (current != null) {

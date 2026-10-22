@@ -61,7 +61,7 @@ public final class AutomationCategories {
         // ── Vehicle composite (remote-ish) ──
         put(VEHICLE, "lock", "unlock", "flash", "findCar", "find_car");
         // ── Climate ──
-        put(CLIMATE, "setAc", "setAcTemp", "stepAcTemp", "setAcFan", "ac", "temperature", "outsideTemp",
+        put(CLIMATE, "setAc", "setAcTemp", "stepAcTemp", "setAcFan", "stepAcFan", "ac", "temperature", "outsideTemp",
                 "seat", "seatClimate", "seat_heat_driver", "seat_heat_passenger",
                 "seat_vent_driver", "seat_vent_passenger",
                 "acAuto", "acSync", "acAutoOff", "fanOnly", "steeringHeat", "recirculation",
